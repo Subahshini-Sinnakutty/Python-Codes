@@ -1,0 +1,74 @@
+import pygame,sys,time
+from pygame.locals import *
+from sys import exit
+pygame.init()
+fps=15
+clock=pygame.time.Clock()
+screen=pygame.display.set_mode((448,496))
+PM_width,PM_height=16,16
+maze=pygame.image.load("GridGB.png")
+G1=pygame.image.load('G1.bmp')
+G2=pygame.image.load('G2.bmp')
+G3=pygame.image.load('G3.bmp')
+G4=pygame.image.load('G4.bmp')
+G5=pygame.image.load('G5.bmp')
+G6=pygame.image.load('G6.bmp')
+PMR=pygame.image.load('PMR.bmp')
+PML=pygame.image.load('PML.bmp')
+obstacle=pygame.image.load('obstacle.bmp')
+goal=pygame.image.load('goal.bmp')
+
+pygame.display.update()
+
+def PACMAN(x,y):
+    screen.blit(PMR,(x,y))
+def text_objects(text,font):
+    textSurface=font.render(text,True,(255,255,0))
+    return textSurface, textSurface.get_rect()
+def message_display(text):
+    largetext=pygame.font.Font('freesansbold.ttf',40)
+    textSurf,textRect= text_objects(text,largetext)
+    textRect.center=(224,248)
+    screen.blit(textSurf,textRect)
+    pygame.display.update()
+    time.sleep(3)
+def begin():
+    message_display('PacMan\'s Deception')
+    screen.fill((0,0,0))
+    message_display('LEVEL 1')
+    
+def loop():
+    x,y=0,225
+    x_change=0
+    y_change=0
+    game_over=False
+    while not game_over:
+        for event in pygame.event.get():
+            if event.type==QUIT:
+                pygame.quit()
+                quit()
+            if event.type==pygame.KEYDOWN:     #movements of pacman
+                if event.key==pygame.K_LEFT:
+                    x_change=-1
+                elif event.key==pygame.K_RIGHT:
+                    x_change=1
+                elif event.key==pygame.K_UP:
+                    y_change=-1
+                elif event.key==pygame.K_DOWN:
+                    y_change=1
+            if event.type==pygame.KEYUP:
+                if event.key==pygame.K_LEFT or event.key==pygame.K_RIGHT:     #stop when key's up
+                    x_change=0
+                elif event.key==pygame.K_UP or event.key==pygame.K_DOWN:
+                    y_change=0
+        x+=x_change
+        y+=y_change            
+        screen.fill((0,0,0))
+        screen.blit(maze,(0,0))
+        PACMAN(x,y)
+        pygame.display.update()
+        clock.tick(60)
+begin()
+loop()
+pygame.quit()
+sys.exit()
