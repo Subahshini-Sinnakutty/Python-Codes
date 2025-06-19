@@ -1,0 +1,119 @@
+import spidev #import SPI library
+import RPi.GPIO as GPIO
+import time
+import dht11
+import datetime
+import urllib.request
+import I2C_LCD_driver
+lcd = I2C_LCD_driver.lcd()
+
+
+GPIO.setmode(GPIO.BCM)
+GPIO.setwarnings(False)
+GPIO.setup(4,GPIO.IN) #set GPIO 4 as input
+GPIO.setup(18,GPIO.OUT) #set GPIO 18 as output
+GPIO.setup(25,GPIO.OUT) #GPIO25 as Trig
+GPIO.setup(27,GPIO.IN) #GPIO27 as Echo
+
+GPIO.setup(26,GPIO.OUT) #set GPIO 26 as output
+spi=spidev.SpiDev() #create SPI object
+spi.open(0,0) #open SPI port 0, device (CS) 0
+GPIO.setup(24,GPIO.OUT) #set GPIO 24 as output
+
+PWM=GPIO.PWM(26,50) #set 50Hz PWM output at GPIO26
+
+#define a function called distance below:
+def distance():
+    #produce a 10us pulse at Trig
+    GPIO.output(25,1) 
+    time.sleep(0.00001)
+    GPIO.output(25,0)
+
+    #measure pulse width (i.e. time of flight) at Echo
+    StartTime=time.time()
+    StopTime=time.time()
+    while GPIO.input(27)==0:
+        StartTime=time.time() #capture start of high pulse       
+    while GPIO.input(27)==1:
+        StopTime=time.time() #capture end of high pulse
+    ElapsedTime=StopTime-StartTime
+
+    #compute distance in cm, from time of flight
+    Distance=(ElapsedTime*34300)/2
+       #distance=time*speed of ultrasound,
+       #/2 because to & fro
+    return Distance
+def readadc(adcnum):
+    #read SPI data from the MCP3008, 8 channels in total
+    if adcnum>7 or adcnum<0:
+        return -1
+    spi.max_speed_hz = 1350000
+    r=spi.xfer2([1,8+adcnum<<4,0])
+        #construct list of 3 items, before sending to ADC:
+        #1(start), (single-ended+channel#) shifted left 4 bits, 0(stop)
+        #see MCP3008 datasheet for details
+    data=((r[1]&3)<<8)+r[2]
+        #ADD first byte with 3 or 0b00000011 - masking operation
+        #shift result left by 8 bits
+        #OR result with second byte, to get 10-bit ADC result
+    return data
+instance = dht11.DHT11(pin=21)
+
+myAPI = 'HHMB61E8KDBT24WH'
+baseURL = "http://api.thingspeak.com/update?api_key=%s"% myAPI
+
+while (True):
+    result = instance.read()
+    if result.is_valid():
+        print("Last valid input: " + str(datetime.datetime.now))
+        print("Temperature: %d C" % result.temperature)
+        print("Humidity: %d %%" % result.humidity)
+        lcd.lcd_display_string('Temp = %.1f C' % result.temperature)
+        time.sleep(1)
+        lcd.lcd_display_string('Hum = %.1f %%' % result.humidity)
+        time.sleep(1)
+
+        humidity= '%.2f' % result.humidity
+        temperature = '%.2f' %result.temperature
+
+        url = baseURL+"&field1=%s&field2=%s" % (temperature,humidity)
+        print(url)
+        conn = urllib.request.urlopen(url)
+        print(conn.read())
+        conn.close()
+        
+           
+    else:
+        print("error")
+    time.sleep(2)
+    print("Measured distance = {0:0.1f} cm".format(distance()))
+    time.sleep(1)
+    LDR_value=readadc(0) #read ADC channel 0 i.e. LDR
+    print("LDR = ", LDR_value) #print result
+    pot_value=readadc(1) #read ADC channel 1 i.e. potentiometer
+    print("pot = ", pot_value) #print result
+    time.sleep(0.5)
+    if LDR_value <200:
+        GPIO.output(24,1) #output logic high/'1'
+        time.sleep(0.5) #delay 1 second
+    else:
+        GPIO.output(24,0) #output logic low/'0'
+        time.sleep(0.5) #delay 1 second
+
+    if distance() < 30:
+        PWM.start(7) #3% duty cycle
+        print('duty cycle:', 7) #3 o'clock position
+        time.sleep(1) #allow time for movement
+    else:
+        PWM.start(12) #13% duty cycle
+        print('duty cycle:', 12) #9 o'clock position
+        time.sleep(1) #allow time for movement
+    if GPIO.input(4): #if read a high at GPIO 4, moisture present
+        print('detected HIGH i.e. moisture')
+        GPIO.output(18,1) #output logic high/'1'
+        time.sleep(0.5) 
+    else: #otherwise (i.e. read a low) at GPIO 4, no moisture
+        print('detected LOW i.e. no moisture')
+        time.sleep(0.5)
+        GPIO.output(18,0) #low        
+        time.sleep(0.5) # to limit print() frequency
